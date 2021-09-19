@@ -62,10 +62,10 @@ public class MultiTest {
   @Test
   public void shouldCreateMultiFailure() throws Exception {
     //Given
-    final Multi<String> uni = Multi.createFrom().failure(IOException::new);
+    final Multi<String> multi = Multi.createFrom().failure(IOException::new);
 
     //When
-    final AssertSubscriber<String> result = uni
+    final AssertSubscriber<String> result = multi
         .onItem().transform(item -> item + " mutiny")
         .onItem().transform(String::toUpperCase)
         .subscribe().withSubscriber(AssertSubscriber.create());
@@ -80,15 +80,15 @@ public class MultiTest {
   public void shouldCancelMulti() throws Exception {
     //Given
     final CountDownLatch count = new CountDownLatch(2);
-    final Multi<Long> uni = Multi.createFrom().ticks().every(Duration.ofMillis(50));
+    final Multi<Long> multi = Multi.createFrom().ticks().every(Duration.ofMillis(50));
 
     //When
     final AssertSubscriber<Long> resultAssertSubscriber =
-        uni.onSubscription().invoke(() -> System.out.println("⬇️ Subscribed"))
+        multi.onSubscription().invoke(() -> System.out.println("⬇️ Subscribed"))
             .onItem().invoke(i -> {
-          System.out.println("⬇️ Received item: " + i);
-          count.countDown();
-        })
+              System.out.println("⬇️ Received item: " + i);
+              count.countDown();
+            })
             .onFailure().invoke(f -> System.out.println("⬇️ Failed with " + f))
             .onCompletion().invoke(() -> System.out.println("⬇️ Completed"))
             .onRequest().invoke(l -> System.out.println("⬆️ Requested: " + l))
@@ -109,7 +109,7 @@ public class MultiTest {
   public void shouldCreateMultiFromEmitter() throws Exception {
     //Given
     final AtomicInteger counter = new AtomicInteger();
-    final Multi<Integer> uni = Multi.createFrom().emitter(emitter -> {
+    final Multi<Integer> multi = Multi.createFrom().emitter(emitter -> {
       emitter.emit(counter.getAndIncrement());
       emitter.emit(counter.getAndIncrement());
       emitter.emit(counter.getAndIncrement());
@@ -117,12 +117,13 @@ public class MultiTest {
     });
 
     //When
-    final AssertSubscriber<Integer> result = uni.subscribe().withSubscriber(AssertSubscriber.create(3));
-    uni.subscribe().with(this.subscriberFake::onItem, this.subscriberFake::onFailure, this.subscriberFake::completed);
+    final AssertSubscriber<Integer> result = multi.subscribe().withSubscriber(AssertSubscriber.create(3));
+    multi.subscribe().with(this.subscriberFake::onItem, this.subscriberFake::onFailure, this.subscriberFake::completed);
 
     //Then
     verify(this.subscriberFake, never()).onFailure(any());
     verify(this.subscriberFake, times(3)).onItem(any());
+    verify(this.subscriberFake, times(1)).completed();
 
     result.assertCompleted();
     result.assertTerminated();
@@ -148,6 +149,34 @@ public class MultiTest {
     assertThat(itemsAsMap.getItem().size(), is(4));
     assertThat(count, is(notNullValue()));
     assertThat(count.getItem(), is(4L));
+  }
+
+  @Test
+  public void shouldGetGroup() throws Exception {
+    //Given
+    final Multi<Integer> multi = Multi.createFrom().items(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11);
+
+    //When
+    final AssertSubscriber<List<String>> result = multi
+        .group().by(this::isOdd)
+        .flatMap(group -> group.group().intoLists().of(3, Duration.ofMillis(10)))
+        .filter(group -> !group.isEmpty())
+        .flatMap(groupedMultis -> {
+          final List<String> erpMsg = groupedMultis.stream()
+              .map(String::valueOf)
+              .collect(Collectors.toList());
+          return Multi.createFrom().item(erpMsg);
+        }).subscribe().withSubscriber(AssertSubscriber.create(4));
+
+    //Then
+    assertThat(result, is(notNullValue()));
+    result.assertCompleted();
+    result.assertTerminated();
+    assertThat(result.getItems(), is(hasSize(4)));
+  }
+
+  private String isOdd(final Integer integer) {
+    return integer % 2 == 0 ? "even" : "odd";
   }
 
   @Test
@@ -215,13 +244,13 @@ public class MultiTest {
   @Test
   public void shouldMultiRecovery() throws Exception {
     //Given
-    final Multi<String> uni = Multi.createFrom().failure(new IOException("boom"));
+    final Multi<String> multi = Multi.createFrom().failure(new IOException("boom"));
 
     //When
-    final AssertSubscriber<String> resultRecover = uni.onFailure().recoverWithItem("hello!")
+    final AssertSubscriber<String> resultRecover = multi.onFailure().recoverWithItem("hello!")
         .subscribe().withSubscriber(AssertSubscriber.create(1));
 
-    final AssertSubscriber<String> resultFromMulti = uni.onFailure().recoverWithMulti(() -> Multi.createFrom().item("hello!"))
+    final AssertSubscriber<String> resultFromMulti = multi.onFailure().recoverWithMulti(() -> Multi.createFrom().item("hello!"))
         .subscribe().withSubscriber(AssertSubscriber.create(1));
 
     //Then
@@ -254,15 +283,15 @@ public class MultiTest {
   @Test
   public void shouldTransform() throws Exception {
     //Given
-    final Multi<String> uni = Multi.createFrom().items("hello", "mutiny!");
+    final Multi<String> multi = Multi.createFrom().items("hello", "mutiny!");
 
     //When
     final AssertSubscriber<String> resultMultiMerge =
-        uni.onItem().transformToMultiAndMerge(item -> Multi.createFrom().item(item.toUpperCase()))
+        multi.onItem().transformToMultiAndMerge(item -> Multi.createFrom().item(item.toUpperCase()))
             .subscribe().withSubscriber(AssertSubscriber.create(2));
 
     final AssertSubscriber<String> resultMultiConcatenate =
-        uni.onItem().transformToMultiAndConcatenate(item -> Multi.createFrom().items(item, item))
+        multi.onItem().transformToMultiAndConcatenate(item -> Multi.createFrom().items(item, item))
             .subscribe().withSubscriber(AssertSubscriber.create(4));
 
     //Then
@@ -295,6 +324,5 @@ public class MultiTest {
     //Then
     assertThat(result, is(notNullValue()));
     assertThat(result.getItems(), is(notNullValue()));
-
   }
 }

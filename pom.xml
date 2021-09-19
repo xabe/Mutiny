@@ -15,7 +15,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
-    <mutiny.version>0.19.2</mutiny.version>
+    <mutiny.version>1.0.0</mutiny.version>
     <mutiny-vertx.version>2.6.0</mutiny-vertx.version>
     <junit.jupiter.api.version>5.7.0</junit.jupiter.api.version>
     <mockito.version>3.6.0</mockito.version>
